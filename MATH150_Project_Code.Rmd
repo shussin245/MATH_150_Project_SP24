@@ -1,0 +1,114 @@
+---
+title: "MATH 150 Project Code"
+author: "Sara Hussin"
+date: "2024-04-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importing Libraries
+
+```{r}
+library(readxl)
+library(dplyr)
+library(glmnet)
+library(ROCR)
+library(tidyr)
+library(vip)
+library(psych)
+```
+
+## Data
+
+```{r}
+#Reading data into R
+data = read_excel("~/Desktop/SP 2024/MATH 150/Project/Project_Data.xlsx")
+
+#Changing `Target` variable from character to integer based on factor levels
+data$Target = factor(data$Target, levels=c("Graduate", "Dropout", "Enrolled"))
+data$Target = as.numeric(data$Target)
+
+#Outputting the data
+head(data)
+scaled_data = scale(data["Previous qualification", "Admission grade",
+                         "Unemployment rate", "Inflation rate", "GDP"])
+head(scaled_data)
+```
+
+## Factor Analysis
+
+```{r}
+#Conducting factor analysis and outputting uniqueness values
+factor_analysis = factanal(data, factors=5)
+factor_analysis$uniquenesses
+```
+
+A value closer to $1$ indicates that the variable isn't suitable for factor analysis. A value close to $0$ suggests that the variable is more strongly related to the common factors extracted by the factor analysis. We only see a few variables that are unique: `Nacionality`, `Mother's occupation`, `Father's occupation`, `International`, `Curricular units 1st sem (credited)`, `Curricular units 1st sem (enrolled)`, `Curricular units 1st sem (approved)`, `Curricular units 1st sem (grade)`, `Curricular units 2nd sem (credited)`, `Curricular units 2nd sem (enrolled)`, `Curricular units 2nd sem (approved)`, `Curricular units 2nd sem (grade)`.
+
+## Splitting Data into Training and Testing
+
+```{r}
+#Setting seed for reproducibility
+set.seed(100442971)
+
+#Creating an index that will sample 70% of the data for training
+#Rest of the data will be for testing
+indices = sample(1:nrow(data), size=round(0.7*nrow(data)), replace=FALSE)
+
+#Creating separate dataframes for training and testing
+training = data[indices, ]
+testing = data[-indices, ]
+
+#Saving predicter and target columns to appropriate variables
+x_train = as.matrix(training[1:36])
+y_train = training$Target
+x_test = as.matrix(testing[1:36])
+y_test = testing$Target
+```
+
+## Logistic Regression
+
+```{r}
+#Setting seed for reproducibility
+set.seed(100442971)
+
+#Creating a model for multiple values of alpha
+#Using alpha 0, 0.5, and 1, but can be any value between 0 and 1
+for(al in c(0, 0.5, 1))    
+{
+  #Repeated this process 2x for each alpha
+  for(i in 1:2)                                                      
+  {
+    print(paste0("Alpha: ", al))
+
+    #Cross-validation finds the best lambda
+    model = cv.glmnet(x_train, y_train, alpha=al, nlambda=1000, family="multinomial", type.measure="mse", nfolds=3)
+
+    #Lambda that has the lowest cross-validation error
+    best_lam = model$lambda.min                                                                
+    print(paste("Best lambda: ", best_lam))
+
+    #Creating another model using the best lambda value
+    best_lam_model = glmnet(x_train, y_train, alpha=al, lambda=best_lam, family="multinomial")
+
+    #Creating a feature importance plot that illustrates the significance of each variable in the model
+    #Shows only the first 10 variables, but can be adjusted to show any number of variables from our model
+    gene_imp = vip(best_lam_model, num_features=10L, geom="col", aesthetics= list(col="pink"))
+    plot(gene_imp)
+  }
+}
+```
+
+A value close to $1$ for the importance indicates that the variable is a strong predictor of the $Target$. We are shown the top predictors for the different models that we obtained.
+
+
+
+
+
+
+
+
+
